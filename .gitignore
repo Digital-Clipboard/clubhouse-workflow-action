@@ -4,3 +4,4 @@ yarn-debug.log*
 yarn-error.log*
 releases/
 .DS_Store
+.env

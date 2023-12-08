@@ -134,6 +134,10 @@ async function addEndStateId(story, endStateName) {
   const workflowState = workflow.states.find(
     (state) => state.name === endStateName
   );
+  if (!workflowState) {
+    core.error("Workflow State Not found with Name: " + endStateName);
+    return;
+  }
   return {
     ...story,
     endStateId: workflowState.id,
@@ -266,8 +270,6 @@ async function transitionStories(storyIds, endStateName) {
   return updatedStoryNames;
 }
 
-getStoryGithubStats(67355, client, octokit);
-
 /**
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
@@ -282,7 +284,7 @@ async function onPullRequestOpen(payload) {
   for (const storyId of storyIds) {
     const stats = await getStoryGithubStats(storyId, client, octokit);
     // TODO: Check this logic, might break
-    if (stats.totalBranches === stats.branchesWithOpenPrs + 1) {
+    if (stats.totalBranches === stats.branchesWithOpenPrs) {
       transitionStories([storyId], "Ready for Feature QA");
       updatedStories.push(storyId);
     }
@@ -314,7 +316,7 @@ async function onPullRequestReview(payload) {
   for (const storyId of storyIds) {
     const stats = await getStoryGithubStats(storyId, client, octokit);
     // TODO: Check this logic, might break
-    if (stats.totalBranches === stats.branchesWithOpenPrs + 1) {
+    if (stats.totalBranches === stats.branchesWithOpenPrs) {
       if (PR_ALL_OK(stats.allOpenPrs)) {
         transitionStories([storyId], "Ready for Staging");
         updatedStories.push(storyId);
@@ -344,7 +346,8 @@ async function onPullRequestSynchronize(payload) {
   for (const storyId of storyIds) {
     const stats = await getStoryGithubStats(storyId, client, octokit);
     // TODO: Check this logic, might break
-    if (stats.totalBranches === stats.branchesWithOpenPrs + 1) {
+    console.log(stats);
+    if (stats.totalBranches === stats.branchesWithOpenPrs) {
       if (PR_ANY_QA_CHANGE_COMMIT_NOT_WIP(stats.allOpenPrs)) {
         transitionStories([storyId], "Ready for Feature QA");
         updatedStories.push(storyId);
@@ -379,6 +382,16 @@ async function actionManager(payload, eventName) {
       throw new Error(`Invalid event type ${eventName}`);
   }
 }
+
+// onPullRequestOpen({
+//   pull_request: {
+//     title: "test commit",
+//     body: "",
+//     head: {
+//       ref: "feature/sc-70146/test-story",
+//     },
+//   },
+// });
 
 module.exports = {
   client,

@@ -102,6 +102,9 @@ async function getStoryGithubStats(storyId, client, octokit) {
   let branchesWithOpenPrs = 0;
   const prNumbers = [];
   for (const branch of story.data.branches) {
+    if (branch.deleted) {
+      continue;
+    }
     totalBranches++;
     for (const pr of branch.pull_requests) {
       if (pr.closed === false && pr.merged === false) {

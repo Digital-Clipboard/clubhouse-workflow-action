@@ -1,6 +1,6 @@
 const github = require("@actions/github");
 const core = require("@actions/core");
-
+require("dotenv").config();
 const ch = require("./src/clubhouse");
 
 async function run() {
