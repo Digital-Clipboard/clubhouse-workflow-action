@@ -11,7 +11,7 @@ const {
 const shortcutToken = process.env.INPUT_CLUBHOUSETOKEN;
 const client = new ShortcutClient(shortcutToken);
 
-const octokit = github.getOctokit(process.env.INPUT_GITHUBTOKEN);
+const octokit = github.getOctokit(process.env.INPUT_GITHUBTOKENORG);
 /**
  * Finds all shortcut story IDs in some string content.
  *
@@ -385,10 +385,10 @@ async function actionManager(payload, eventName) {
 
 // onPullRequestOpen({
 //   pull_request: {
-//     title: "test commit",
+//     title: "feat: [sc-70156] Test story 9",
 //     body: "",
 //     head: {
-//       ref: "feature/sc-70146/test-story",
+//       ref: "feature/sc-70156/test-story-9",
 //     },
 //   },
 // });
