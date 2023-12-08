@@ -283,7 +283,7 @@ async function onPullRequestOpen(payload) {
     const stats = await getStoryGithubStats(storyId, client, octokit);
     // TODO: Check this logic, might break
     if (stats.totalBranches === stats.branchesWithOpenPrs + 1) {
-      transitionStories([storyId], "Ready to Feature QA");
+      transitionStories([storyId], "Ready for Feature QA");
       updatedStories.push(storyId);
     }
   }
