@@ -1,4 +1,12 @@
 const CONSTS = require("./consts");
+
+const github = require("@actions/github");
+const githubToken = process.env.INPUT_GITHUBTOKENORG;
+if (!githubToken) {
+  throw new Error("No INPUT_GITHUBTOKENORG Env Set");
+}
+const octokit = github.getOctokit(githubToken);
+
 const PR_REVIEWS_QUERY = `
 query($name: String!, $owner: String!, $pull_number: Int!) {
   repository(name: $name, owner: $owner) {
@@ -96,7 +104,7 @@ function getIsLatestCommitWIP(reviewComment) {
   return shouldBypass;
 }
 
-async function getStoryGithubStats(storyId, client, octokit) {
+async function getStoryGithubStats(storyId, client) {
   const story = await client.getStory(storyId);
   let totalBranches = 0;
   let branchesWithOpenPrs = 0;
@@ -164,4 +172,5 @@ module.exports = {
   getReviewCommentStatus,
   getDataFromPR,
   getStoryGithubStats,
+  octokit,
 };

@@ -1,17 +1,13 @@
 const { ShortcutClient } = require("@useshortcut/client");
 const core = require("@actions/core");
-const github = require("@actions/github");
-const { getDataFromPR, getStoryGithubStats } = require("./github");
-const {
-  PR_ALL_OK,
-  PR_ALL_QA_OK,
-  PR_ANY_QA_FAIL,
-  PR_ANY_QA_CHANGE_COMMIT_NOT_WIP,
-} = require("./conditionals");
+const { getDataFromPR } = require("./github");
+
 const shortcutToken = process.env.INPUT_CLUBHOUSETOKEN;
+if (!shortcutToken) {
+  throw new Error("No INPUT_CLUBHOUSETOKEN Env Set");
+}
 const client = new ShortcutClient(shortcutToken);
 
-const octokit = github.getOctokit(process.env.INPUT_GITHUBTOKENORG);
 /**
  * Finds all shortcut story IDs in some string content.
  *
@@ -33,7 +29,7 @@ function extractStoryIds(content) {
  * @return {Promise<Object>} - shortcut story object with required properties.
  */
 
-async function addDetailstoStory(storyId) {
+async function addDetailsToStory(storyId) {
   try {
     const { data: story } = await client.getStory(storyId);
     core.debug("\n getStory full response: \n \n" + JSON.stringify(story));
@@ -63,9 +59,9 @@ async function addDetailstoStory(storyId) {
  * @returns {Promise<Array>} - shortcut story objects with required properties.
  */
 
-async function addDetailstoStories(storyIds) {
+async function addDetailsToStories(storyIds) {
   const stories = await Promise.all(
-    storyIds.map((id) => addDetailstoStory(id))
+    storyIds.map((id) => addDetailsToStory(id))
   );
   return stories.filter((story) => {
     if (typeof story === "string") {
@@ -224,7 +220,7 @@ async function releaseStories(
     console.warn("No shortcut stories were found in the release.");
     return [];
   }
-  const stories = await addDetailstoStories(storyIds);
+  const stories = await addDetailsToStories(storyIds);
   const storiesWithUpdatedDescriptions = updateDescriptionsMaybe(
     stories,
     releaseUrl,
@@ -258,7 +254,7 @@ async function transitionStories(storyIds, endStateName) {
     console.warn("No shortcut stories were found.");
     return storyIds;
   }
-  const stories = await addDetailstoStories(storyIds);
+  const stories = await addDetailsToStories(storyIds);
   const storiesWithEndStateIds = await addEndStateIds(stories, endStateName);
   core.debug(
     "\n stories with end states: \n \n" + JSON.stringify(storiesWithEndStateIds)
@@ -273,114 +269,11 @@ async function transitionStories(storyIds, endStateName) {
 /**
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
-async function onPullRequestOpen(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
-  const storyIds = getAllStoryIds(payload);
-  const updatedStories = [];
-
-  for (const storyId of storyIds) {
-    const stats = await getStoryGithubStats(storyId, client, octokit);
-    // TODO: Check this logic, might break
-    if (stats.totalBranches === stats.branchesWithOpenPrs) {
-      transitionStories([storyId], "Ready for Feature QA");
-      updatedStories.push(storyId);
-    }
-  }
-  return updatedStories;
-}
-
-/**
- * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- */
 function getAllStoryIds(payload) {
   const prData = getDataFromPR(payload);
   const content = `${prData.title} ${prData.body} ${prData.ref}`;
   const storyIds = extractStoryIds(content);
   return storyIds;
-}
-
-/**
- * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- */
-async function onPullRequestReview(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
-  const storyIds = getAllStoryIds(payload);
-  const updatedStories = [];
-
-  for (const storyId of storyIds) {
-    const stats = await getStoryGithubStats(storyId, client, octokit);
-    // TODO: Check this logic, might break
-    if (stats.totalBranches === stats.branchesWithOpenPrs) {
-      if (PR_ALL_OK(stats.allOpenPrs)) {
-        transitionStories([storyId], "Ready for Staging");
-        updatedStories.push(storyId);
-      } else if (PR_ALL_QA_OK(stats.allOpenPrs)) {
-        transitionStories([storyId], "Ready for Code Review");
-        updatedStories.push(storyId);
-      } else if (PR_ANY_QA_FAIL(stats.allOpenPrs)) {
-        transitionStories([storyId], "Test Fail");
-        updatedStories.push(storyId);
-      }
-    }
-  }
-  return updatedStories;
-}
-
-/**
- *
- * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- */
-async function onPullRequestSynchronize(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
-  const storyIds = getAllStoryIds(payload);
-  const updatedStories = [];
-  for (const storyId of storyIds) {
-    const stats = await getStoryGithubStats(storyId, client, octokit);
-    // TODO: Check this logic, might break
-    console.log(stats);
-    if (stats.totalBranches === stats.branchesWithOpenPrs) {
-      if (PR_ANY_QA_CHANGE_COMMIT_NOT_WIP(stats.allOpenPrs)) {
-        transitionStories([storyId], "Ready for Feature QA");
-        updatedStories.push(storyId);
-      }
-    }
-  }
-  return updatedStories;
-}
-/**
- *
- * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- * @param {string} eventName
- */
-async function actionManager(payload, eventName) {
-  switch (eventName) {
-    case "pull_request": {
-      if (payload.action === "synchronize") {
-        const updatedStories = await onPullRequestSynchronize(payload);
-        return updatedStories;
-      }
-      if (payload.action === "opened" || payload.action === "reopened") {
-        const updatedStories = await onPullRequestOpen(payload);
-        return updatedStories;
-      }
-      throw new Error(`Invalid pull request action ${payload.action}`);
-    }
-    case "pull_request_review": {
-      const updatedStories = await onPullRequestReview(payload);
-      return updatedStories;
-    }
-    default:
-      throw new Error(`Invalid event type ${eventName}`);
-  }
 }
 
 // onPullRequestOpen({
@@ -396,8 +289,8 @@ async function actionManager(payload, eventName) {
 module.exports = {
   client,
   extractStoryIds,
-  addDetailstoStory,
-  addDetailstoStories,
+  addDetailsToStory,
+  addDetailsToStories,
   updateDescription,
   updateDescriptionsMaybe,
   addEndStateId,
@@ -406,5 +299,5 @@ module.exports = {
   updateStories,
   releaseStories,
   transitionStories,
-  actionManager,
+  getAllStoryIds,
 };
