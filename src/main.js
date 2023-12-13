@@ -13,10 +13,6 @@ const {
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestOpen(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
 
@@ -38,10 +34,6 @@ async function onPullRequestOpen(payload) {
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestReview(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
 
@@ -72,10 +64,6 @@ async function onPullRequestReview(payload) {
  * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestSynchronize(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
   for (const storyId of storyIds) {
@@ -101,6 +89,20 @@ async function onPullRequestSynchronize(payload) {
  * @param {string} eventName
  */
 async function actionManager(payload, eventName) {
+  if (!payload) {
+    core.debug(`No Payload Received; EventName: ${eventName}`);
+    throw new Error("No Payload");
+  }
+  if (!payload.pull_request) {
+    core.debug(
+      `No Pull Request In Payload: ${JSON.stringify(
+        payload,
+        null,
+        2
+      )}; EventName: ${eventName}`
+    );
+    throw new Error("No Pull Request in Payload");
+  }
   switch (eventName) {
     case "pull_request": {
       if (payload.action === "synchronize") {
