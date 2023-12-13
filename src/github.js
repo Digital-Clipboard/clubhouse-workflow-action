@@ -38,6 +38,43 @@ query($name: String!, $owner: String!, $pull_number: Int!) {
 }
 `;
 
+const GET_COMMENTS_QUERY = `
+query($name: String!, $owner: String!, $pull_number: Int!) {
+  repository(name: $name, owner: $owner) {
+    pullRequest(number: $pull_number) {
+      comments(first:50){
+        nodes {
+          body
+      }
+    }
+  }
+}
+}
+`;
+
+/**
+ *
+ * @param {string} repoName repository name
+ * @param {string} owner owner of the repository
+ * @param {number} prNumber pull request number
+ * @returns {Promise<Array<string>>}
+ */
+async function getPRComments(repoName, owner, prNumber) {
+  const prResponse = await octokit.graphql(GET_COMMENTS_QUERY, {
+    name: repoName,
+    owner,
+    pull_number: prNumber,
+  });
+  if (!prResponse?.pullRequest?.comments?.nodes) {
+    const msg =
+      "Couldn't get PR Comments" +
+      prettyStringify({ repoName, owner, prNumber });
+    core.debug(msg);
+    throw new Error(msg);
+  }
+  return prResponse.pullRequest.comments.nodes.map((item) => item.body);
+}
+
 function parsePullRequestFromUrl(pr) {
   core.debug("Parsing Pull Request From URL: " + prettyStringify(pr));
   const parsedUrl = pr.url
@@ -88,15 +125,30 @@ function getReviewCommentStatus(reviewComment, ignoreTime = false) {
  * @param {import("@actions/github/lib/interfaces").WebhookPayload | undefined} payload
  * @returns
  */
-function getDataFromPR(payload) {
+async function getDataFromPR(payload) {
   core.debug("Getting Data From PR: " + prettyStringify(payload));
   if (!payload || !payload.pull_request) {
     throw new Error("No Pull Request in Payload");
   }
+  if (!payload || !payload.repository) {
+    throw new Error("No Repository in Payload");
+  }
+  const repoNameSplit = payload.repository.full_name?.split("/") || [];
+  const repoName = repoNameSplit[1];
+  const repoOwner = repoNameSplit[0];
+  if (!repoName || !repoOwner) {
+    throw new Error("Couldn't get repo name or owner from payload");
+  }
+  const comments = await getPRComments(
+    repoName,
+    repoOwner,
+    payload.pull_request.number
+  );
   return {
     title: payload.pull_request["title"],
     body: payload.pull_request["body"],
     ref: payload.pull_request["head"]["ref"],
+    comments,
   };
 }
 
@@ -186,4 +238,5 @@ module.exports = {
   getDataFromPR,
   getStoryGithubStats,
   octokit,
+  getPRComments,
 };

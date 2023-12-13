@@ -17,7 +17,7 @@ const client = new ShortcutClient(shortcutToken);
  */
 
 function extractStoryIds(content) {
-  const regex = /(?<=sc|sc-|ch|ch-)\d{1,7}/gi;
+  const regex = /(?<=sc|sc-|ch|ch-|\/story\/)\d{1,7}/gi;
   const all = content.match(regex);
   const unique = [...new Set(all)].map((i) => +i);
   return unique;
@@ -272,9 +272,11 @@ async function transitionStories(storyIds, endStateName) {
 /**
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
-function getAllStoryIds(payload) {
-  const prData = getDataFromPR(payload);
-  const content = `${prData.title} ${prData.body} ${prData.ref}`;
+async function getAllStoryIds(payload) {
+  const prData = await getDataFromPR(payload);
+  const content = `${prData.title} ${prData.body} ${
+    prData.ref
+  } ${prData.comments.join(" ")}`;
   const storyIds = extractStoryIds(content);
   return storyIds;
 }

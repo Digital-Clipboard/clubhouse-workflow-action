@@ -1,8 +1,8 @@
+require("dotenv").config();
 const github = require("@actions/github");
 const core = require("@actions/core");
 const actionManager = require("./src/main");
 const { prettyStringify } = require("./src/utils");
-require("dotenv").config();
 
 async function run() {
   try {

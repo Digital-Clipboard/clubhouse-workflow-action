@@ -15,7 +15,7 @@ const { prettyStringify } = require("./utils");
  */
 async function onPullRequestOpen(payload) {
   core.debug("On Pull Request Open: " + prettyStringify(payload));
-  const storyIds = getAllStoryIds(payload);
+  const storyIds = await getAllStoryIds(payload);
   const updatedStories = [];
 
   for (const storyId of storyIds) {
@@ -37,7 +37,7 @@ async function onPullRequestOpen(payload) {
  */
 async function onPullRequestReview(payload) {
   core.debug("On Pull Request Review: " + prettyStringify(payload));
-  const storyIds = getAllStoryIds(payload);
+  const storyIds = await getAllStoryIds(payload);
   const updatedStories = [];
 
   for (const storyId of storyIds) {
@@ -68,7 +68,7 @@ async function onPullRequestReview(payload) {
  */
 async function onPullRequestSynchronize(payload) {
   core.debug("On Pull Request Synchronize: " + prettyStringify(payload));
-  const storyIds = getAllStoryIds(payload);
+  const storyIds = await getAllStoryIds(payload);
   const updatedStories = [];
   for (const storyId of storyIds) {
     const stats = await getStoryGithubStats(storyId, client);
@@ -106,6 +106,7 @@ async function actionManager(payload, eventName) {
   core.debug(
     "Action Manager: Event Name: " + eventName + "; " + prettyStringify(payload)
   );
+
   switch (eventName) {
     case "pull_request": {
       if (payload.action === "synchronize") {
