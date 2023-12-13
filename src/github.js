@@ -1,4 +1,13 @@
 const CONSTS = require("./consts");
+const core = require("@actions/core");
+const github = require("@actions/github");
+const { prettyStringify } = require("./utils");
+const githubToken = process.env.INPUT_GITHUBTOKENORG;
+if (!githubToken) {
+  throw new Error("No INPUT_GITHUBTOKENORG Env Set");
+}
+const octokit = github.getOctokit(githubToken);
+
 const PR_REVIEWS_QUERY = `
 query($name: String!, $owner: String!, $pull_number: Int!) {
   repository(name: $name, owner: $owner) {
@@ -30,6 +39,7 @@ query($name: String!, $owner: String!, $pull_number: Int!) {
 `;
 
 function parsePullRequestFromUrl(pr) {
+  core.debug("Parsing Pull Request From URL: " + prettyStringify(pr));
   const parsedUrl = pr.url
     .replace("https://github.com/", "")
     .replace(/\/pull.*/, "");
@@ -42,6 +52,13 @@ function parsePullRequestFromUrl(pr) {
 }
 
 function getReviewCommentStatus(reviewComment, ignoreTime = false) {
+  core.debug(
+    "Getting Review Comment Status: IgnoreTime: " +
+      ignoreTime +
+      "; " +
+      prettyStringify(reviewComment)
+  );
+
   if (!reviewComment) {
     return "NA";
   }
@@ -72,6 +89,7 @@ function getReviewCommentStatus(reviewComment, ignoreTime = false) {
  * @returns
  */
 function getDataFromPR(payload) {
+  core.debug("Getting Data From PR: " + prettyStringify(payload));
   if (!payload || !payload.pull_request) {
     throw new Error("No Pull Request in Payload");
   }
@@ -83,6 +101,8 @@ function getDataFromPR(payload) {
 }
 
 function getIsLatestCommitWIP(reviewComment) {
+  core.debug("Is Latest Commit WIP: " + prettyStringify(reviewComment));
+
   const message =
     reviewComment?.pullRequest?.commits?.nodes?.[0]?.commit?.message || "";
   let shouldBypass = false;
@@ -96,7 +116,8 @@ function getIsLatestCommitWIP(reviewComment) {
   return shouldBypass;
 }
 
-async function getStoryGithubStats(storyId, client, octokit) {
+async function getStoryGithubStats(storyId, client) {
+  core.debug("Getting Story Github Stats: StoryId: " + storyId);
   const story = await client.getStory(storyId);
   let totalBranches = 0;
   let branchesWithOpenPrs = 0;
@@ -155,7 +176,7 @@ async function getStoryGithubStats(storyId, client, octokit) {
     })
   );
 
-  console.log(JSON.stringify(allOpenPrs, null, 2));
+  core.debug("All Open Prs: " + prettyStringify(allOpenPrs));
   return { totalBranches, branchesWithOpenPrs, allOpenPrs };
 }
 
@@ -164,4 +185,5 @@ module.exports = {
   getReviewCommentStatus,
   getDataFromPR,
   getStoryGithubStats,
+  octokit,
 };

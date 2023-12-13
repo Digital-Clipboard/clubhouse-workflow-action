@@ -1,17 +1,14 @@
 const { ShortcutClient } = require("@useshortcut/client");
 const core = require("@actions/core");
-const github = require("@actions/github");
-const { getDataFromPR, getStoryGithubStats } = require("./github");
-const {
-  PR_ALL_OK,
-  PR_ALL_QA_OK,
-  PR_ANY_QA_FAIL,
-  PR_ANY_QA_CHANGE_COMMIT_NOT_WIP,
-} = require("./conditionals");
+const { getDataFromPR } = require("./github");
+const { prettyStringify } = require("./utils");
+
 const shortcutToken = process.env.INPUT_CLUBHOUSETOKEN;
+if (!shortcutToken) {
+  throw new Error("No INPUT_CLUBHOUSETOKEN Env Set");
+}
 const client = new ShortcutClient(shortcutToken);
 
-const octokit = github.getOctokit(process.env.INPUT_GITHUBTOKENORG);
 /**
  * Finds all shortcut story IDs in some string content.
  *
@@ -33,10 +30,10 @@ function extractStoryIds(content) {
  * @return {Promise<Object>} - shortcut story object with required properties.
  */
 
-async function addDetailstoStory(storyId) {
+async function addDetailsToStory(storyId) {
   try {
     const { data: story } = await client.getStory(storyId);
-    core.debug("\n getStory full response: \n \n" + JSON.stringify(story));
+    core.debug("\n getStory full response: \n \n" + prettyStringify(story));
     return {
       // shortcut represents all IDs as numbers
       storyId: story.id,
@@ -46,7 +43,7 @@ async function addDetailstoStory(storyId) {
       workflowStateId: story.workflow_state_id,
     };
   } catch (err) {
-    core.debug("\n getStory full error: \n \n" + JSON.stringify(err));
+    core.debug("\n getStory full error: \n \n" + prettyStringify(err));
     if (err.response.status === 404) {
       console.log(`Could not locate story: ${storyId}`);
       return storyId;
@@ -63,9 +60,9 @@ async function addDetailstoStory(storyId) {
  * @returns {Promise<Array>} - shortcut story objects with required properties.
  */
 
-async function addDetailstoStories(storyIds) {
+async function addDetailsToStories(storyIds) {
   const stories = await Promise.all(
-    storyIds.map((id) => addDetailstoStory(id))
+    storyIds.map((id) => addDetailsToStory(id))
   );
   return stories.filter((story) => {
     if (typeof story === "string") {
@@ -130,7 +127,7 @@ function updateDescriptionsMaybe(stories, releaseUrl, shouldUpdateDescription) {
 
 async function addEndStateId(story, endStateName) {
   const { data: workflow } = await client.getWorkflow(story.workflowId);
-  core.debug("\n full workflow response: \n \n" + JSON.stringify(workflow));
+  core.debug("\n full workflow response: \n \n" + prettyStringify(workflow));
   const workflowState = workflow.states.find(
     (state) => state.name === endStateName
   );
@@ -177,7 +174,7 @@ async function updateStory(storyWithEndStateId) {
     params
   );
   core.debug(
-    "\n full update story response: \n \n" + JSON.stringify(updatedStory)
+    "\n full update story response: \n \n" + prettyStringify(updatedStory)
   );
   if (updatedStory.workflow_state_id !== storyWithEndStateId.endStateId) {
     throw new Error(
@@ -219,12 +216,12 @@ async function releaseStories(
   shouldUpdateDescription
 ) {
   const storyIds = extractStoryIds(releaseBody);
-  core.debug("\n story ids found: \n \n" + JSON.stringify(storyIds));
+  core.debug("\n story ids found: \n \n" + prettyStringify(storyIds));
   if (storyIds === null) {
     console.warn("No shortcut stories were found in the release.");
     return [];
   }
-  const stories = await addDetailstoStories(storyIds);
+  const stories = await addDetailsToStories(storyIds);
   const storiesWithUpdatedDescriptions = updateDescriptionsMaybe(
     stories,
     releaseUrl,
@@ -235,11 +232,12 @@ async function releaseStories(
     endStateName
   );
   core.debug(
-    "\n stories with end states: \n \n" + JSON.stringify(storiesWithEndStateIds)
+    "\n stories with end states: \n \n" +
+      prettyStringify(storiesWithEndStateIds)
   );
   const updatedStoryNames = await updateStories(storiesWithEndStateIds);
   core.debug(
-    "\n updated story names: \n \n" + JSON.stringify(updatedStoryNames)
+    "\n updated story names: \n \n" + prettyStringify(updatedStoryNames)
   );
   return updatedStoryNames;
 }
@@ -253,43 +251,22 @@ async function releaseStories(
  */
 
 async function transitionStories(storyIds, endStateName) {
-  core.debug("\n story ids found: \n \n" + JSON.stringify(storyIds));
+  core.debug("\n story ids found: \n \n" + prettyStringify(storyIds));
   if (storyIds.length === 0) {
     console.warn("No shortcut stories were found.");
     return storyIds;
   }
-  const stories = await addDetailstoStories(storyIds);
+  const stories = await addDetailsToStories(storyIds);
   const storiesWithEndStateIds = await addEndStateIds(stories, endStateName);
   core.debug(
-    "\n stories with end states: \n \n" + JSON.stringify(storiesWithEndStateIds)
+    "\n stories with end states: \n \n" +
+      prettyStringify(storiesWithEndStateIds)
   );
   const updatedStoryNames = await updateStories(storiesWithEndStateIds);
   core.debug(
-    "\n updated story names: \n \n" + JSON.stringify(updatedStoryNames)
+    "\n updated story names: \n \n" + prettyStringify(updatedStoryNames)
   );
   return updatedStoryNames;
-}
-
-/**
- * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- */
-async function onPullRequestOpen(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
-  const storyIds = getAllStoryIds(payload);
-  const updatedStories = [];
-
-  for (const storyId of storyIds) {
-    const stats = await getStoryGithubStats(storyId, client, octokit);
-    // TODO: Check this logic, might break
-    if (stats.totalBranches === stats.branchesWithOpenPrs) {
-      transitionStories([storyId], "Ready for Feature QA");
-      updatedStories.push(storyId);
-    }
-  }
-  return updatedStories;
 }
 
 /**
@@ -302,102 +279,11 @@ function getAllStoryIds(payload) {
   return storyIds;
 }
 
-/**
- * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- */
-async function onPullRequestReview(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
-  const storyIds = getAllStoryIds(payload);
-  const updatedStories = [];
-
-  for (const storyId of storyIds) {
-    const stats = await getStoryGithubStats(storyId, client, octokit);
-    // TODO: Check this logic, might break
-    if (stats.totalBranches === stats.branchesWithOpenPrs) {
-      if (PR_ALL_OK(stats.allOpenPrs)) {
-        transitionStories([storyId], "Ready for Staging");
-        updatedStories.push(storyId);
-      } else if (PR_ALL_QA_OK(stats.allOpenPrs)) {
-        transitionStories([storyId], "Ready for Code Review");
-        updatedStories.push(storyId);
-      } else if (PR_ANY_QA_FAIL(stats.allOpenPrs)) {
-        transitionStories([storyId], "Test Fail");
-        updatedStories.push(storyId);
-      }
-    }
-  }
-  return updatedStories;
-}
-
-/**
- *
- * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- */
-async function onPullRequestSynchronize(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
-  const storyIds = getAllStoryIds(payload);
-  const updatedStories = [];
-  for (const storyId of storyIds) {
-    const stats = await getStoryGithubStats(storyId, client, octokit);
-    // TODO: Check this logic, might break
-    console.log(stats);
-    if (stats.totalBranches === stats.branchesWithOpenPrs) {
-      if (PR_ANY_QA_CHANGE_COMMIT_NOT_WIP(stats.allOpenPrs)) {
-        transitionStories([storyId], "Ready for Feature QA");
-        updatedStories.push(storyId);
-      }
-    }
-  }
-  return updatedStories;
-}
-/**
- *
- * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
- * @param {string} eventName
- */
-async function actionManager(payload, eventName) {
-  switch (eventName) {
-    case "pull_request": {
-      if (payload.action === "synchronize") {
-        const updatedStories = await onPullRequestSynchronize(payload);
-        return updatedStories;
-      }
-      if (payload.action === "opened" || payload.action === "reopened") {
-        const updatedStories = await onPullRequestOpen(payload);
-        return updatedStories;
-      }
-      throw new Error(`Invalid pull request action ${payload.action}`);
-    }
-    case "pull_request_review": {
-      const updatedStories = await onPullRequestReview(payload);
-      return updatedStories;
-    }
-    default:
-      throw new Error(`Invalid event type ${eventName}`);
-  }
-}
-
-// onPullRequestOpen({
-//   pull_request: {
-//     title: "feat: [sc-70156] Test story 9",
-//     body: "",
-//     head: {
-//       ref: "feature/sc-70156/test-story-9",
-//     },
-//   },
-// });
-
 module.exports = {
   client,
   extractStoryIds,
-  addDetailstoStory,
-  addDetailstoStories,
+  addDetailsToStory,
+  addDetailsToStories,
   updateDescription,
   updateDescriptionsMaybe,
   addEndStateId,
@@ -406,5 +292,5 @@ module.exports = {
   updateStories,
   releaseStories,
   transitionStories,
-  actionManager,
+  getAllStoryIds,
 };
