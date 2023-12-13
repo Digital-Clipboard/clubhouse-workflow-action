@@ -17037,7 +17037,7 @@ function wrappy (fn, cb) {
 /***/ ((module) => {
 
 /**
- *
+ * Conditional check that *ALL* Prs have QA Status and Engineer Status OK
  * @param {any[]} prs
  */
 function PR_ALL_OK(prs) {
@@ -17045,7 +17045,7 @@ function PR_ALL_OK(prs) {
 }
 
 /**
- *
+ * Conditional check that *ALL* Prs have QA Status OK
  * @param {any[]} prs
  */
 function PR_ALL_QA_OK(prs) {
@@ -17053,7 +17053,7 @@ function PR_ALL_QA_OK(prs) {
 }
 
 /**
- *
+ * Conditional check that *ALL* Prs have Engineer Status OK
  * @param {any[]} prs
  */
 function PR_ALL_ENG_OK(prs) {
@@ -17061,7 +17061,7 @@ function PR_ALL_ENG_OK(prs) {
 }
 
 /**
- *
+ * Conditional check that *ANY* Prs have QA Status FAIL
  * @param {any[]} prs
  */
 function PR_ANY_QA_FAIL(prs) {
@@ -17069,7 +17069,7 @@ function PR_ANY_QA_FAIL(prs) {
 }
 
 /**
- *
+ * Conditional check that *ANY* Prs have QA Status FAIL and Last Commit is not WIP
  * @param {any[]} prs
  */
 function PR_ANY_QA_CHANGE_COMMIT_NOT_WIP(prs) {
@@ -17749,6 +17749,11 @@ module.exports = {
 /***/ 1608:
 /***/ ((module) => {
 
+/**
+ * Util function that pretty stringifies an object
+ * @param {unknown} obj Object that will get pretty stringified
+ * @returns {string}
+ */
 function prettyStringify(obj) {
   return JSON.stringify(obj, null, 2);
 }
