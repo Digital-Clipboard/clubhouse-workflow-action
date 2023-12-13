@@ -17153,6 +17153,43 @@ query($name: String!, $owner: String!, $pull_number: Int!) {
 }
 `;
 
+const GET_COMMENTS_QUERY = `
+query($name: String!, $owner: String!, $pull_number: Int!) {
+  repository(name: $name, owner: $owner) {
+    pullRequest(number: $pull_number) {
+      comments(first:50){
+        nodes {
+          body
+      }
+    }
+  }
+}
+}
+`;
+
+/**
+ *
+ * @param {string} repoName repository name
+ * @param {string} owner owner of the repository
+ * @param {number} prNumber pull request number
+ * @returns {Promise<Array<string>>}
+ */
+async function getPRComments(repoName, owner, prNumber) {
+  const prResponse = await octokit.graphql(GET_COMMENTS_QUERY, {
+    name: repoName,
+    owner,
+    pull_number: prNumber,
+  });
+  if (!prResponse?.pullRequest?.comments?.nodes) {
+    const msg =
+      "Couldn't get PR Comments" +
+      prettyStringify({ repoName, owner, prNumber });
+    core.debug(msg);
+    throw new Error(msg);
+  }
+  return prResponse.pullRequest.comments.nodes.map((item) => item.body);
+}
+
 function parsePullRequestFromUrl(pr) {
   core.debug("Parsing Pull Request From URL: " + prettyStringify(pr));
   const parsedUrl = pr.url
@@ -17203,15 +17240,30 @@ function getReviewCommentStatus(reviewComment, ignoreTime = false) {
  * @param {import("@actions/github/lib/interfaces").WebhookPayload | undefined} payload
  * @returns
  */
-function getDataFromPR(payload) {
+async function getDataFromPR(payload) {
   core.debug("Getting Data From PR: " + prettyStringify(payload));
   if (!payload || !payload.pull_request) {
     throw new Error("No Pull Request in Payload");
   }
+  if (!payload || !payload.repository) {
+    throw new Error("No Repository in Payload");
+  }
+  const repoNameSplit = payload.repository.full_name?.split("/") || [];
+  const repoName = repoNameSplit[1];
+  const repoOwner = repoNameSplit[0];
+  if (!repoName || !repoOwner) {
+    throw new Error("Couldn't get repo name or owner from payload");
+  }
+  const comments = await getPRComments(
+    repoName,
+    repoOwner,
+    payload.pull_request.number
+  );
   return {
     title: payload.pull_request["title"],
     body: payload.pull_request["body"],
     ref: payload.pull_request["head"]["ref"],
+    comments,
   };
 }
 
@@ -17301,6 +17353,7 @@ module.exports = {
   getDataFromPR,
   getStoryGithubStats,
   octokit,
+  getPRComments,
 };
 
 
@@ -17326,7 +17379,7 @@ const { prettyStringify } = __nccwpck_require__(1608);
  */
 async function onPullRequestOpen(payload) {
   core.debug("On Pull Request Open: " + prettyStringify(payload));
-  const storyIds = getAllStoryIds(payload);
+  const storyIds = await getAllStoryIds(payload);
   const updatedStories = [];
 
   for (const storyId of storyIds) {
@@ -17348,7 +17401,7 @@ async function onPullRequestOpen(payload) {
  */
 async function onPullRequestReview(payload) {
   core.debug("On Pull Request Review: " + prettyStringify(payload));
-  const storyIds = getAllStoryIds(payload);
+  const storyIds = await getAllStoryIds(payload);
   const updatedStories = [];
 
   for (const storyId of storyIds) {
@@ -17379,7 +17432,7 @@ async function onPullRequestReview(payload) {
  */
 async function onPullRequestSynchronize(payload) {
   core.debug("On Pull Request Synchronize: " + prettyStringify(payload));
-  const storyIds = getAllStoryIds(payload);
+  const storyIds = await getAllStoryIds(payload);
   const updatedStories = [];
   for (const storyId of storyIds) {
     const stats = await getStoryGithubStats(storyId, client);
@@ -17417,6 +17470,7 @@ async function actionManager(payload, eventName) {
   core.debug(
     "Action Manager: Event Name: " + eventName + "; " + prettyStringify(payload)
   );
+
   switch (eventName) {
     case "pull_request": {
       if (payload.action === "synchronize") {
@@ -17465,7 +17519,7 @@ const client = new ShortcutClient(shortcutToken);
  */
 
 function extractStoryIds(content) {
-  const regex = /(?<=sc|sc-|ch|ch-)\d{1,7}/gi;
+  const regex = /(?<=sc|sc-|ch|ch-|\/story\/)\d{1,7}/gi;
   const all = content.match(regex);
   const unique = [...new Set(all)].map((i) => +i);
   return unique;
@@ -17720,9 +17774,11 @@ async function transitionStories(storyIds, endStateName) {
 /**
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
-function getAllStoryIds(payload) {
-  const prData = getDataFromPR(payload);
-  const content = `${prData.title} ${prData.body} ${prData.ref}`;
+async function getAllStoryIds(payload) {
+  const prData = await getDataFromPR(payload);
+  const content = `${prData.title} ${prData.body} ${
+    prData.ref
+  } ${prData.comments.join(" ")}`;
   const storyIds = extractStoryIds(content);
   return storyIds;
 }
@@ -17974,11 +18030,11 @@ module.exports = JSON.parse('[[[0,44],"disallowed_STD3_valid"],[[45,46],"valid"]
 var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
 (() => {
+(__nccwpck_require__(2437).config)();
 const github = __nccwpck_require__(5438);
 const core = __nccwpck_require__(2186);
 const actionManager = __nccwpck_require__(1713);
 const { prettyStringify } = __nccwpck_require__(1608);
-(__nccwpck_require__(2437).config)();
 
 async function run() {
   try {
