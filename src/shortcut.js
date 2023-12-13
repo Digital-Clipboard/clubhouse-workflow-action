@@ -1,6 +1,7 @@
 const { ShortcutClient } = require("@useshortcut/client");
 const core = require("@actions/core");
 const { getDataFromPR } = require("./github");
+const { prettyStringify } = require("./utils");
 
 const shortcutToken = process.env.INPUT_CLUBHOUSETOKEN;
 if (!shortcutToken) {
@@ -32,7 +33,7 @@ function extractStoryIds(content) {
 async function addDetailsToStory(storyId) {
   try {
     const { data: story } = await client.getStory(storyId);
-    core.debug("\n getStory full response: \n \n" + JSON.stringify(story));
+    core.debug("\n getStory full response: \n \n" + prettyStringify(story));
     return {
       // shortcut represents all IDs as numbers
       storyId: story.id,
@@ -42,7 +43,7 @@ async function addDetailsToStory(storyId) {
       workflowStateId: story.workflow_state_id,
     };
   } catch (err) {
-    core.debug("\n getStory full error: \n \n" + JSON.stringify(err));
+    core.debug("\n getStory full error: \n \n" + prettyStringify(err));
     if (err.response.status === 404) {
       console.log(`Could not locate story: ${storyId}`);
       return storyId;
@@ -126,7 +127,7 @@ function updateDescriptionsMaybe(stories, releaseUrl, shouldUpdateDescription) {
 
 async function addEndStateId(story, endStateName) {
   const { data: workflow } = await client.getWorkflow(story.workflowId);
-  core.debug("\n full workflow response: \n \n" + JSON.stringify(workflow));
+  core.debug("\n full workflow response: \n \n" + prettyStringify(workflow));
   const workflowState = workflow.states.find(
     (state) => state.name === endStateName
   );
@@ -173,7 +174,7 @@ async function updateStory(storyWithEndStateId) {
     params
   );
   core.debug(
-    "\n full update story response: \n \n" + JSON.stringify(updatedStory)
+    "\n full update story response: \n \n" + prettyStringify(updatedStory)
   );
   if (updatedStory.workflow_state_id !== storyWithEndStateId.endStateId) {
     throw new Error(
@@ -215,7 +216,7 @@ async function releaseStories(
   shouldUpdateDescription
 ) {
   const storyIds = extractStoryIds(releaseBody);
-  core.debug("\n story ids found: \n \n" + JSON.stringify(storyIds));
+  core.debug("\n story ids found: \n \n" + prettyStringify(storyIds));
   if (storyIds === null) {
     console.warn("No shortcut stories were found in the release.");
     return [];
@@ -231,11 +232,12 @@ async function releaseStories(
     endStateName
   );
   core.debug(
-    "\n stories with end states: \n \n" + JSON.stringify(storiesWithEndStateIds)
+    "\n stories with end states: \n \n" +
+      prettyStringify(storiesWithEndStateIds)
   );
   const updatedStoryNames = await updateStories(storiesWithEndStateIds);
   core.debug(
-    "\n updated story names: \n \n" + JSON.stringify(updatedStoryNames)
+    "\n updated story names: \n \n" + prettyStringify(updatedStoryNames)
   );
   return updatedStoryNames;
 }
@@ -249,7 +251,7 @@ async function releaseStories(
  */
 
 async function transitionStories(storyIds, endStateName) {
-  core.debug("\n story ids found: \n \n" + JSON.stringify(storyIds));
+  core.debug("\n story ids found: \n \n" + prettyStringify(storyIds));
   if (storyIds.length === 0) {
     console.warn("No shortcut stories were found.");
     return storyIds;
@@ -257,11 +259,12 @@ async function transitionStories(storyIds, endStateName) {
   const stories = await addDetailsToStories(storyIds);
   const storiesWithEndStateIds = await addEndStateIds(stories, endStateName);
   core.debug(
-    "\n stories with end states: \n \n" + JSON.stringify(storiesWithEndStateIds)
+    "\n stories with end states: \n \n" +
+      prettyStringify(storiesWithEndStateIds)
   );
   const updatedStoryNames = await updateStories(storiesWithEndStateIds);
   core.debug(
-    "\n updated story names: \n \n" + JSON.stringify(updatedStoryNames)
+    "\n updated story names: \n \n" + prettyStringify(updatedStoryNames)
   );
   return updatedStoryNames;
 }
@@ -275,16 +278,6 @@ function getAllStoryIds(payload) {
   const storyIds = extractStoryIds(content);
   return storyIds;
 }
-
-// onPullRequestOpen({
-//   pull_request: {
-//     title: "feat: [sc-70156] Test story 9",
-//     body: "",
-//     head: {
-//       ref: "feature/sc-70156/test-story-9",
-//     },
-//   },
-// });
 
 module.exports = {
   client,

@@ -8,11 +8,13 @@ const {
   PR_ANY_QA_FAIL,
   PR_ANY_QA_CHANGE_COMMIT_NOT_WIP,
 } = require("./conditionals");
+const { prettyStringify } = require("./utils");
 
 /**
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestOpen(payload) {
+  core.debug("On Pull Request Open: " + prettyStringify(payload));
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
 
@@ -34,6 +36,7 @@ async function onPullRequestOpen(payload) {
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestReview(payload) {
+  core.debug("On Pull Request Review: " + prettyStringify(payload));
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
 
@@ -64,12 +67,11 @@ async function onPullRequestReview(payload) {
  * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestSynchronize(payload) {
+  core.debug("On Pull Request Synchronize: " + prettyStringify(payload));
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
   for (const storyId of storyIds) {
     const stats = await getStoryGithubStats(storyId, client);
-    // TODO: Check this logic, might break
-    console.log(stats);
     if (stats.totalBranches === stats.branchesWithOpenPrs) {
       if (PR_ANY_QA_CHANGE_COMMIT_NOT_WIP(stats.allOpenPrs)) {
         transitionStories(
@@ -95,14 +97,15 @@ async function actionManager(payload, eventName) {
   }
   if (!payload.pull_request) {
     core.debug(
-      `No Pull Request In Payload: ${JSON.stringify(
-        payload,
-        null,
-        2
+      `No Pull Request In Payload: ${prettyStringify(
+        payload
       )}; EventName: ${eventName}`
     );
     throw new Error("No Pull Request in Payload");
   }
+  core.debug(
+    "Action Manager: Event Name: " + eventName + "; " + prettyStringify(payload)
+  );
   switch (eventName) {
     case "pull_request": {
       if (payload.action === "synchronize") {
