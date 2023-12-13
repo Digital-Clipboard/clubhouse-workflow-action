@@ -17114,8 +17114,9 @@ module.exports = {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const CONSTS = __nccwpck_require__(4631);
-
+const core = __nccwpck_require__(2186);
 const github = __nccwpck_require__(5438);
+const { prettyStringify } = __nccwpck_require__(1608);
 const githubToken = process.env.INPUT_GITHUBTOKENORG;
 if (!githubToken) {
   throw new Error("No INPUT_GITHUBTOKENORG Env Set");
@@ -17153,6 +17154,7 @@ query($name: String!, $owner: String!, $pull_number: Int!) {
 `;
 
 function parsePullRequestFromUrl(pr) {
+  core.debug("Parsing Pull Request From URL: " + prettyStringify(pr));
   const parsedUrl = pr.url
     .replace("https://github.com/", "")
     .replace(/\/pull.*/, "");
@@ -17165,6 +17167,13 @@ function parsePullRequestFromUrl(pr) {
 }
 
 function getReviewCommentStatus(reviewComment, ignoreTime = false) {
+  core.debug(
+    "Getting Review Comment Status: IgnoreTime: " +
+      ignoreTime +
+      "; " +
+      prettyStringify(reviewComment)
+  );
+
   if (!reviewComment) {
     return "NA";
   }
@@ -17195,6 +17204,7 @@ function getReviewCommentStatus(reviewComment, ignoreTime = false) {
  * @returns
  */
 function getDataFromPR(payload) {
+  core.debug("Getting Data From PR: " + prettyStringify(payload));
   if (!payload || !payload.pull_request) {
     throw new Error("No Pull Request in Payload");
   }
@@ -17206,6 +17216,8 @@ function getDataFromPR(payload) {
 }
 
 function getIsLatestCommitWIP(reviewComment) {
+  core.debug("Is Latest Commit WIP: " + prettyStringify(reviewComment));
+
   const message =
     reviewComment?.pullRequest?.commits?.nodes?.[0]?.commit?.message || "";
   let shouldBypass = false;
@@ -17220,6 +17232,7 @@ function getIsLatestCommitWIP(reviewComment) {
 }
 
 async function getStoryGithubStats(storyId, client) {
+  core.debug("Getting Story Github Stats: StoryId: " + storyId);
   const story = await client.getStory(storyId);
   let totalBranches = 0;
   let branchesWithOpenPrs = 0;
@@ -17278,7 +17291,7 @@ async function getStoryGithubStats(storyId, client) {
     })
   );
 
-  console.log(JSON.stringify(allOpenPrs, null, 2));
+  core.debug("All Open Prs: " + prettyStringify(allOpenPrs));
   return { totalBranches, branchesWithOpenPrs, allOpenPrs };
 }
 
@@ -17306,15 +17319,13 @@ const {
   PR_ANY_QA_FAIL,
   PR_ANY_QA_CHANGE_COMMIT_NOT_WIP,
 } = __nccwpck_require__(4604);
+const { prettyStringify } = __nccwpck_require__(1608);
 
 /**
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestOpen(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
+  core.debug("On Pull Request Open: " + prettyStringify(payload));
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
 
@@ -17336,10 +17347,7 @@ async function onPullRequestOpen(payload) {
  * * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestReview(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
+  core.debug("On Pull Request Review: " + prettyStringify(payload));
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
 
@@ -17370,16 +17378,11 @@ async function onPullRequestReview(payload) {
  * @param {import("@actions/github/lib/interfaces").WebhookPayload} payload
  */
 async function onPullRequestSynchronize(payload) {
-  if (!payload.pull_request) {
-    core.debug("No Pull Request \n\n\n" + JSON.stringify(payload));
-    throw new Error("No Pull Request");
-  }
+  core.debug("On Pull Request Synchronize: " + prettyStringify(payload));
   const storyIds = getAllStoryIds(payload);
   const updatedStories = [];
   for (const storyId of storyIds) {
     const stats = await getStoryGithubStats(storyId, client);
-    // TODO: Check this logic, might break
-    console.log(stats);
     if (stats.totalBranches === stats.branchesWithOpenPrs) {
       if (PR_ANY_QA_CHANGE_COMMIT_NOT_WIP(stats.allOpenPrs)) {
         transitionStories(
@@ -17399,6 +17402,21 @@ async function onPullRequestSynchronize(payload) {
  * @param {string} eventName
  */
 async function actionManager(payload, eventName) {
+  if (!payload) {
+    core.debug(`No Payload Received; EventName: ${eventName}`);
+    throw new Error("No Payload");
+  }
+  if (!payload.pull_request) {
+    core.debug(
+      `No Pull Request In Payload: ${prettyStringify(
+        payload
+      )}; EventName: ${eventName}`
+    );
+    throw new Error("No Pull Request in Payload");
+  }
+  core.debug(
+    "Action Manager: Event Name: " + eventName + "; " + prettyStringify(payload)
+  );
   switch (eventName) {
     case "pull_request": {
       if (payload.action === "synchronize") {
@@ -17431,6 +17449,7 @@ module.exports = actionManager;
 const { ShortcutClient } = __nccwpck_require__(5914);
 const core = __nccwpck_require__(2186);
 const { getDataFromPR } = __nccwpck_require__(8396);
+const { prettyStringify } = __nccwpck_require__(1608);
 
 const shortcutToken = process.env.INPUT_CLUBHOUSETOKEN;
 if (!shortcutToken) {
@@ -17462,7 +17481,7 @@ function extractStoryIds(content) {
 async function addDetailsToStory(storyId) {
   try {
     const { data: story } = await client.getStory(storyId);
-    core.debug("\n getStory full response: \n \n" + JSON.stringify(story));
+    core.debug("\n getStory full response: \n \n" + prettyStringify(story));
     return {
       // shortcut represents all IDs as numbers
       storyId: story.id,
@@ -17472,7 +17491,7 @@ async function addDetailsToStory(storyId) {
       workflowStateId: story.workflow_state_id,
     };
   } catch (err) {
-    core.debug("\n getStory full error: \n \n" + JSON.stringify(err));
+    core.debug("\n getStory full error: \n \n" + prettyStringify(err));
     if (err.response.status === 404) {
       console.log(`Could not locate story: ${storyId}`);
       return storyId;
@@ -17556,7 +17575,7 @@ function updateDescriptionsMaybe(stories, releaseUrl, shouldUpdateDescription) {
 
 async function addEndStateId(story, endStateName) {
   const { data: workflow } = await client.getWorkflow(story.workflowId);
-  core.debug("\n full workflow response: \n \n" + JSON.stringify(workflow));
+  core.debug("\n full workflow response: \n \n" + prettyStringify(workflow));
   const workflowState = workflow.states.find(
     (state) => state.name === endStateName
   );
@@ -17603,7 +17622,7 @@ async function updateStory(storyWithEndStateId) {
     params
   );
   core.debug(
-    "\n full update story response: \n \n" + JSON.stringify(updatedStory)
+    "\n full update story response: \n \n" + prettyStringify(updatedStory)
   );
   if (updatedStory.workflow_state_id !== storyWithEndStateId.endStateId) {
     throw new Error(
@@ -17645,7 +17664,7 @@ async function releaseStories(
   shouldUpdateDescription
 ) {
   const storyIds = extractStoryIds(releaseBody);
-  core.debug("\n story ids found: \n \n" + JSON.stringify(storyIds));
+  core.debug("\n story ids found: \n \n" + prettyStringify(storyIds));
   if (storyIds === null) {
     console.warn("No shortcut stories were found in the release.");
     return [];
@@ -17661,11 +17680,12 @@ async function releaseStories(
     endStateName
   );
   core.debug(
-    "\n stories with end states: \n \n" + JSON.stringify(storiesWithEndStateIds)
+    "\n stories with end states: \n \n" +
+      prettyStringify(storiesWithEndStateIds)
   );
   const updatedStoryNames = await updateStories(storiesWithEndStateIds);
   core.debug(
-    "\n updated story names: \n \n" + JSON.stringify(updatedStoryNames)
+    "\n updated story names: \n \n" + prettyStringify(updatedStoryNames)
   );
   return updatedStoryNames;
 }
@@ -17679,7 +17699,7 @@ async function releaseStories(
  */
 
 async function transitionStories(storyIds, endStateName) {
-  core.debug("\n story ids found: \n \n" + JSON.stringify(storyIds));
+  core.debug("\n story ids found: \n \n" + prettyStringify(storyIds));
   if (storyIds.length === 0) {
     console.warn("No shortcut stories were found.");
     return storyIds;
@@ -17687,11 +17707,12 @@ async function transitionStories(storyIds, endStateName) {
   const stories = await addDetailsToStories(storyIds);
   const storiesWithEndStateIds = await addEndStateIds(stories, endStateName);
   core.debug(
-    "\n stories with end states: \n \n" + JSON.stringify(storiesWithEndStateIds)
+    "\n stories with end states: \n \n" +
+      prettyStringify(storiesWithEndStateIds)
   );
   const updatedStoryNames = await updateStories(storiesWithEndStateIds);
   core.debug(
-    "\n updated story names: \n \n" + JSON.stringify(updatedStoryNames)
+    "\n updated story names: \n \n" + prettyStringify(updatedStoryNames)
   );
   return updatedStoryNames;
 }
@@ -17705,16 +17726,6 @@ function getAllStoryIds(payload) {
   const storyIds = extractStoryIds(content);
   return storyIds;
 }
-
-// onPullRequestOpen({
-//   pull_request: {
-//     title: "feat: [sc-70156] Test story 9",
-//     body: "",
-//     head: {
-//       ref: "feature/sc-70156/test-story-9",
-//     },
-//   },
-// });
 
 module.exports = {
   client,
@@ -17730,6 +17741,20 @@ module.exports = {
   releaseStories,
   transitionStories,
   getAllStoryIds,
+};
+
+
+/***/ }),
+
+/***/ 1608:
+/***/ ((module) => {
+
+function prettyStringify(obj) {
+  return JSON.stringify(obj, null, 2);
+}
+
+module.exports = {
+  prettyStringify,
 };
 
 
@@ -17947,13 +17972,14 @@ var __webpack_exports__ = {};
 const github = __nccwpck_require__(5438);
 const core = __nccwpck_require__(2186);
 const actionManager = __nccwpck_require__(1713);
+const { prettyStringify } = __nccwpck_require__(1608);
 (__nccwpck_require__(2437).config)();
 
 async function run() {
   try {
     const { payload, eventName } = github.context;
     const updatedStories = await actionManager(payload, eventName);
-    core.setOutput("updatedStories", JSON.stringify(updatedStories));
+    core.setOutput("updatedStories", prettyStringify(updatedStories));
   } catch (error) {
     core.setFailed(error.message);
   }
